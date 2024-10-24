@@ -9,6 +9,11 @@ input RSI_oversold = 30;
 input length_MA_fast = 8;
 input length_MA_slow = 17;
 input shareSize = 100;  # Number of shares per trade
+input lookback_period = 126; # Approximately 6 months of trading days
+
+# Date restriction logic
+def month = GetMonth();
+def isRestrictedPeriod = month >= 8 and month <= 10;
 
 # Calculate RSI using Wilder's method
 def NetChgAvg = WildersAverage(close - close[1], length_RSI);
@@ -19,15 +24,24 @@ def RSI = 100 * (0.5 + 0.5 * (NetChgAvg / TotChgAvg));
 def MA_fast = ExpAverage(close, length_MA_fast);
 def MA_slow = ExpAverage(close, length_MA_slow);
 
+# Calculate average price change over lookback period
+def priceChange = close - close[1];
+def avgPriceChange = Average(AbsValue(priceChange), lookback_period);
+def currentPriceDrop = close[1] - close;
+
 # Basic conditions without position checks
 def isOverbought = RSI > RSI_overbought;
 def isOversold = RSI < RSI_oversold;
 def goldenCross = MA_fast > MA_slow;
 def deathCross = MA_fast < MA_slow;
 
+# Price drop exit condition
+def largePriceDrop = currentPriceDrop > (2 * avgPriceChange);
+
 # Entry and exit base conditions
-def entryLongCondition = RSI>50 and goldenCross;
-def exitLongCondition = RSI<50 or deathCross;
+# Added date restriction to entry condition
+def entryLongCondition = RSI > 50 and goldenCross and !isRestrictedPeriod;
+def exitLongCondition = RSI < 50 or deathCross;
 
 # Trade counter logic
 rec tradeCount = if !tradeCount[1] then 0 
@@ -52,11 +66,3 @@ AddOrder(OrderType.SELL_TO_CLOSE,
     exitLong,
     tradeSize = shareSize,
     name = "LONG_EXIT");
-
-
-
-# Add exit signal text
-#AddChartBubble(exitLong, high * 1.015, 
-#               "Long" + tradeCount + " Exit", 
-#               Color.DARK_GREEN, no);
-
