@@ -2,12 +2,13 @@
 # Author: Claude
 # Platform: thinkorswim
 # Uses EMA and RSI Wilder's Method
+
 # Input Parameters
 input length_RSI = 14;
-input RSI_overbought = 70;
-input RSI_oversold = 30;
 input length_MA_fast = 8;
 input length_MA_slow = 17;
+input RSI_overbought = 70;
+input RSI_oversold = 30;
 input shareSize = 100;  # Number of shares per trade
 input lookback_period = 126; # Approximately 6 months of trading days
 
@@ -36,26 +37,33 @@ def goldenCross = MA_fast > MA_slow;
 def deathCross = MA_fast < MA_slow;
 
 # Price drop exit condition
-def largePriceDrop = currentPriceDrop > (2 * avgPriceChange);
+def largePriceDrop = currentPriceDrop > (2.75 * avgPriceChange);
 
-# Entry and exit base conditions
-# Added date restriction to entry condition
-def entryLongCondition = RSI > 50 and goldenCross and !isRestrictedPeriod;
-def exitLongCondition = RSI < 50 or deathCross;
-
-# Trade counter logic
-rec tradeCount = if !tradeCount[1] then 0 
-                 else if entryLongCondition then tradeCount[1] + 1 
-                 else tradeCount[1];
+# Entry and exit base conditions without position state
+def baseEntryCondition = RSI > 50 and goldenCross and !isRestrictedPeriod;
+def exitLongCondition = RSI < 50 or deathCross or largePriceDrop;
 
 # Position state tracking
-rec positionState = if positionState[1] == 0 and entryLongCondition then 1
+rec positionState = if positionState[1] == 0 and baseEntryCondition then 1
                     else if positionState[1] == 1 and exitLongCondition then 0
                     else positionState[1];
 
 # Final entry/exit signals with confirmation of state change
-def enterLong = entryLongCondition and positionState == 1 and positionState[1] == 0;
 def exitLong = exitLongCondition and positionState == 0 and positionState[1] == 1;
+
+# Post-exit waiting period counter
+rec daysAfterExit = if exitLong then 1
+                    else if daysAfterExit[1] >= 1 and daysAfterExit[1] < 2 then daysAfterExit[1] + 1
+                    else 0;
+
+# Trade counter logic
+rec tradeCount = if !tradeCount[1] then 0 
+                 else if baseEntryCondition and daysAfterExit == 0 then tradeCount[1] + 1 
+                 else tradeCount[1];
+
+# Final entry condition with waiting period
+def entryLongCondition = baseEntryCondition and daysAfterExit == 0;
+def enterLong = entryLongCondition and positionState == 1 and positionState[1] == 0;
 
 # Strategy Orders
 AddOrder(OrderType.BUY_TO_OPEN, 
