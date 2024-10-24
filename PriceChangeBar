@@ -1,0 +1,36 @@
+# Title: Price Change vs Historical Average
+# Author: Claude
+# Version: 1.2
+
+declare lower;
+
+# Calculate today's price change
+def todayChange = close - open;
+
+# Calculate the average daily price change over the past year
+def daysInYear = 252; # Approximate number of trading days in a year
+def rollingSum = Sum(close[1] - open[1], daysInYear);
+def avgChange = rollingSum / daysInYear;
+
+# Create the plots
+plot TodayBar = todayChange;
+plot AvgBar = avgChange;
+plot ZeroLine = 0;
+
+# Style the bars
+TodayBar.SetPaintingStrategy(PaintingStrategy.HISTOGRAM);
+AvgBar.SetPaintingStrategy(PaintingStrategy.HISTOGRAM);
+
+# Set colors based on whether the change is positive or negative
+TodayBar.AssignValueColor(if todayChange >= 0 then CreateColor(0, 255, 0) else CreateColor(255, 0, 0));
+AvgBar.SetDefaultColor(CreateColor(128, 128, 128));
+
+# Style the zero line
+ZeroLine.SetDefaultColor(CreateColor(128, 128, 128));
+ZeroLine.SetStyle(Curve.SHORT_DASH);
+
+# Add labels
+AddLabel(1, "Today's Change: " + AsPrice(todayChange), 
+         if todayChange >= 0 then CreateColor(0, 255, 0) else CreateColor(255, 0, 0));
+AddLabel(1, "Yearly Avg Change: " + AsPrice(avgChange),
+         CreateColor(128, 128, 128));
