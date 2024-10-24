@@ -1,36 +1,36 @@
-# Title: Price Change vs Historical Average
+# Title: Price Change vs Historical Average Ratio
 # Author: Claude
-# Version: 1.2
-
+# Version: 1.7
 declare lower;
 
 # Calculate today's price change
 def todayChange = close - open;
 
-# Calculate the average daily price change over the past year
-def daysInYear = 252; # Approximate number of trading days in a year
-def rollingSum = Sum(close[1] - open[1], daysInYear);
+# Calculate the average daily price change over the past year using absolute values
+def daysInYear = 252; # Standard trading days in a year
+def rollingSum = Sum(AbsValue(close[1] - open[1]), daysInYear);
 def avgChange = rollingSum / daysInYear;
 
+# Calculate the ratio of today's change to average change
+# Handle division by zero and very small numbers
+def minThreshold = 0.01; # Minimum threshold to prevent division by very small numbers
+def ratio = if AbsValue(avgChange) < minThreshold then 
+             if todayChange >= 0 then 1 else -1
+           else 
+             todayChange / avgChange;
+
 # Create the plots
-plot TodayBar = todayChange;
-plot AvgBar = avgChange;
+plot RatioBar = ratio;
 plot ZeroLine = 0;
 
 # Style the bars
-TodayBar.SetPaintingStrategy(PaintingStrategy.HISTOGRAM);
-AvgBar.SetPaintingStrategy(PaintingStrategy.HISTOGRAM);
+RatioBar.SetPaintingStrategy(PaintingStrategy.HISTOGRAM);
 
 # Set colors based on whether the change is positive or negative
-TodayBar.AssignValueColor(if todayChange >= 0 then CreateColor(0, 255, 0) else CreateColor(255, 0, 0));
-AvgBar.SetDefaultColor(CreateColor(128, 128, 128));
+RatioBar.AssignValueColor(if todayChange >= 0 then CreateColor(0, 255, 0) else CreateColor(255, 0, 0));
 
 # Style the zero line
 ZeroLine.SetDefaultColor(CreateColor(128, 128, 128));
 ZeroLine.SetStyle(Curve.SHORT_DASH);
 
-# Add labels
-AddLabel(1, "Today's Change: " + AsPrice(todayChange), 
-         if todayChange >= 0 then CreateColor(0, 255, 0) else CreateColor(255, 0, 0));
-AddLabel(1, "Yearly Avg Change: " + AsPrice(avgChange),
-         CreateColor(128, 128, 128));
+
