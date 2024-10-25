@@ -1,0 +1,13 @@
+Strategy1:
+
+create a think script strategy with the following entry and exit conditions : 
+
+Entry condition 1: Thinkorswim Marketforecast indicator should  be up trending and  should be rising and above 50 for the Intermediate line.
+
+RSI wilder 14 day should be rising and above 50
+
+MACD Histogram  (8,17,9) for Exponential Moving average should be uptrending and the fast line should be above the slow line or should have crossed above. 
+
+Exit if RSI falls below 50 or if Marketforecast  intermediate line falls below 50 or if the  MacdHistorgram (8,17,9) for exponential moving average has the fast line crossed below the slow line  or if it is below the slow line.
+
+No long entry in the month of August or September.
