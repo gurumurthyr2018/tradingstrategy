@@ -1,0 +1,143 @@
+#Ichimoku Strategy enhanced 
+
+
+# Enhanced Trading Strategy combining MarketForecast, RSI, and MACD indicators
+# with additional filters and risk management
+
+declare upper;
+
+# Basic inputs
+input price = close;
+input showLabels = yes;
+
+# Customizable thresholds
+input intermediateLineThreshold = 50;
+input rsiThreshold = 50;
+input rsiLength = 14;
+input volumeMultiplier = 1.5; # Volume must be this times the average
+input atrPeriod = 14;
+input profitTarget = 2.0; # ATR multiplier for profit target
+input stopLoss = 1.5;    # ATR multiplier for stop loss
+
+# MarketForecast components
+def near = MarketForecast().Near;
+def intermediate = MarketForecast().Intermediate;
+def far = MarketForecast().Far;
+
+# Enhanced MarketForecast conditions
+def intermediateRising = intermediate > intermediate[1];
+def intermediateAboveThreshold = intermediate >= intermediateLineThreshold;
+def bullishForecast = near > 50 && intermediate > 50 && far > 50;
+def strongBullishForecast = near > 70 && intermediate > 70 && far > 70;
+
+# Enhanced RSI calculations
+def rsi = RSIWilder(length = rsiLength);
+def rsiRising = rsi > rsi[1];
+def rsiAboveThreshold = rsi >= rsiThreshold;
+def rsiMomentum = rsi > rsi[1] && rsi[1] > rsi[2]; # Two consecutive rising periods
+
+# MACD calculations with 8,17,9
+def fastLength = 8;
+def slowLength = 17;
+def macdLength = 9;
+
+def fastMA = ExpAverage(price, fastLength);
+def slowMA = ExpAverage(price, slowLength);
+def macdValue = fastMA - slowMA;
+def macdAvg = ExpAverage(macdValue, macdLength);
+def macdHist = macdValue - macdAvg;
+
+def macdRising = macdHist > macdHist[1];
+def macdCrossAbove = macdValue > macdAvg && macdValue[1] <= macdAvg[1];
+def macdAbove = macdValue > macdAvg;
+def strongMACD = macdValue > macdAvg && macdHist > macdHist[1] && macdHist[1] > macdHist[2];
+
+# Volume filter
+def averageVolume = Average(volume, 20);
+def highVolume = volume > (averageVolume * volumeMultiplier);
+
+# ATR for position sizing and risk management
+def atr = ATR(atrPeriod);
+def stopLossPrice = close - (atr * stopLoss);
+def profitTargetPrice = close + (atr * profitTarget);
+
+# Trend filter using multiple timeframes
+def ema20 = ExpAverage(close, 20);
+def ema50 = ExpAverage(close, 50);
+def ema200 = ExpAverage(close, 200);
+def bullishTrend = ema20 > ema50 && ema50 > ema200;
+
+# Seasonal restriction with additional holiday considerations
+def currentMonth = GetMonth();
+def currentDayOfMonth = GetDayOfMonth();
+def notRestrictedMonth = currentMonth != 8 && currentMonth != 9;
+def notHolidayPeriod = !(currentMonth == 12 && currentDayOfMonth > 20) && 
+                       !(currentMonth == 1 && currentDayOfMonth < 5);
+
+# Enhanced entry conditions with multiple confirmation levels
+def weakEntryCondition = 
+    intermediateRising &&
+    intermediateAboveThreshold &&
+    rsiRising &&
+    rsiAboveThreshold &&
+    (macdRising || macdCrossAbove || macdAbove) &&
+    notRestrictedMonth &&
+    notHolidayPeriod;
+
+def strongEntryCondition = 
+    weakEntryCondition &&
+    strongBullishForecast &&
+    rsiMomentum &&
+    strongMACD &&
+    highVolume &&
+    bullishTrend;
+
+# Exit conditions with multiple levels
+def weakExitCondition = 
+    !rsiAboveThreshold || 
+    !intermediateAboveThreshold || 
+    (!macdAbove && macdValue < macdAvg && macdValue[1] >= macdAvg[1]);
+
+def strongExitCondition = 
+    weakExitCondition ||
+    close < stopLossPrice ||
+    close > profitTargetPrice ||
+    (far < 30 && intermediate < 30);
+
+# Plot signals with strength indication
+plot WeakEntrySignal = weakEntryCondition;
+plot StrongEntrySignal = strongEntryCondition;
+plot ExitSignal = strongExitCondition;
+
+WeakEntrySignal.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_UP);
+StrongEntrySignal.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_UP);
+ExitSignal.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_DOWN);
+
+WeakEntrySignal.SetDefaultColor(Color.LIGHT_GREEN);
+StrongEntrySignal.SetDefaultColor(Color.GREEN);
+ExitSignal.SetDefaultColor(Color.RED);
+
+# Risk management plots
+plot StopLoss = if !IsNaN(stopLossPrice) then stopLossPrice else Double.NaN;
+plot ProfitTarget = if !IsNaN(profitTargetPrice) then profitTargetPrice else Double.NaN;
+
+StopLoss.SetDefaultColor(Color.RED);
+ProfitTarget.SetDefaultColor(Color.GREEN);
+StopLoss.SetStyle(Curve.SHORT_DASH);
+ProfitTarget.SetStyle(Curve.SHORT_DASH);
+
+# Alerts with different levels of urgency
+Alert(strongEntryCondition, "Strong Entry Signal", Alert.BAR, Sound.Bell);
+Alert(weakEntryCondition, "Weak Entry Signal", Alert.BAR, Sound.Ding);
+Alert(strongExitCondition, "Exit Signal", Alert.BAR, Sound.Ring);
+
+# Enhanced labels for debugging and monitoring
+AddLabel(showLabels, 
+    "MF(N/I/F): " + Round(near, 1) + "/" + Round(intermediate, 1) + "/" + Round(far, 1) + 
+    "\nRSI: " + Round(rsi, 1) + 
+    "\nMACD: " + Round(macdValue, 2) + 
+    "\nVol%: " + Round(volume / averageVolume * 100, 0) + "%", 
+    if strongEntryCondition then Color.GREEN 
+    else if weakEntryCondition then Color.LIGHT_GREEN 
+    else if strongExitCondition then Color.RED 
+    else Color.GRAY);
