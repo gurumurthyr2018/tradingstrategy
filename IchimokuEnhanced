@@ -26,9 +26,10 @@ def mktFar = MF[2];
 
 # Enhanced MarketForecast conditions
 def intermediateRising = mktIntermediate > mktIntermediate[1];
-def intermediateAboveThreshold = mktIntermediate >= intermediateLineThreshold;
-def bullishForecast = mktNear > 50 and mktIntermediate > 50 and mktFar > 50;
-def strongBullishForecast = mktNear > 70 and mktIntermediate > 70 and mktFar > 70;
+#updating to far
+def intermediateAboveThreshold = mktFar >= intermediateLineThreshold;
+#def bullishForecast = mktNear > 50 and mktIntermediate > 50 and mktFar > 50;
+#def strongBullishForecast = mktNear > 70 and mktIntermediate > 70 and mktFar > 70;
 
 # RSI calculations
 def rsi = RSI(14);
@@ -88,7 +89,7 @@ def strongExitCondition = weakExitCondition or priceExit or forecastExit;
 
 # Base entry conditions (without position check)
 def baseWeakEntry = marketForcastEntry and rsiEntry and macdEntry and seasonalEntry;
-def baseStrongEntry = baseWeakEntry and strongBullishForecast and rsiMomentum and 
+def baseStrongEntry = baseWeakEntry  and rsiMomentum and 
                      strongMACD and highVolume and bullishTrend;
 
 # Position tracking
