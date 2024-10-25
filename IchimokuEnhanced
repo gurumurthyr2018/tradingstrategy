@@ -1,9 +1,3 @@
-#Ichimoku Strategy enhanced 
-
-
-# Enhanced Trading Strategy combining MarketForecast, RSI, and MACD indicators
-# with additional filters and risk management
-
 declare upper;
 
 # Basic inputs
@@ -19,96 +13,102 @@ input atrPeriod = 14;
 input profitTarget = 2.0; # ATR multiplier for profit target
 input stopLoss = 1.5;    # ATR multiplier for stop loss
 
-# MarketForecast components
-def near = MarketForecast().Near;
-def intermediate = MarketForecast().Intermediate;
-def far = MarketForecast().Far;
-
-# Enhanced MarketForecast conditions
-def intermediateRising = intermediate > intermediate[1];
-def intermediateAboveThreshold = intermediate >= intermediateLineThreshold;
-def bullishForecast = near > 50 && intermediate > 50 && far > 50;
-def strongBullishForecast = near > 70 && intermediate > 70 && far > 70;
-
-# Enhanced RSI calculations
-def rsi = RSIWilder(length = rsiLength);
-def rsiRising = rsi > rsi[1];
-def rsiAboveThreshold = rsi >= rsiThreshold;
-def rsiMomentum = rsi > rsi[1] && rsi[1] > rsi[2]; # Two consecutive rising periods
-
-# MACD calculations with 8,17,9
+# MACD Inputs
 def fastLength = 8;
 def slowLength = 17;
 def macdLength = 9;
 
+# MarketForecast components
+def MF = MarketForecast();
+def mktNear = MF[0];
+def mktIntermediate = MF[1];
+def mktFar = MF[2];
+
+# Enhanced MarketForecast conditions
+def intermediateRising = mktIntermediate > mktIntermediate[1];
+def intermediateAboveThreshold = mktIntermediate >= intermediateLineThreshold;
+def bullishForecast = mktNear > 50 and mktIntermediate > 50 and mktFar > 50;
+def strongBullishForecast = mktNear > 70 and mktIntermediate > 70 and mktFar > 70;
+
+# RSI calculations
+def rsi = RSI(14);
+def rsiRising = rsi > rsi[1];
+def rsiAboveThreshold = rsi >= rsiThreshold;
+def rsiMomentum = rsi > rsi[1] and rsi[1] > rsi[2];
+
+# MACD calculations
 def fastMA = ExpAverage(price, fastLength);
 def slowMA = ExpAverage(price, slowLength);
 def macdValue = fastMA - slowMA;
 def macdAvg = ExpAverage(macdValue, macdLength);
 def macdHist = macdValue - macdAvg;
-
 def macdRising = macdHist > macdHist[1];
-def macdCrossAbove = macdValue > macdAvg && macdValue[1] <= macdAvg[1];
+def macdCrossAbove = macdValue > macdAvg and macdValue[1] <= macdAvg[1];
 def macdAbove = macdValue > macdAvg;
-def strongMACD = macdValue > macdAvg && macdHist > macdHist[1] && macdHist[1] > macdHist[2];
+def strongMACD = macdValue > macdAvg and macdHist > macdHist[1] and macdHist[1] > macdHist[2];
 
 # Volume filter
-def averageVolume = Average(volume, 20);
-def highVolume = volume > (averageVolume * volumeMultiplier);
+def volumeAvg = Average(volume, 20);
+def highVolume = volume > (volumeAvg * volumeMultiplier);
 
 # ATR for position sizing and risk management
 def atr = ATR(atrPeriod);
-def stopLossPrice = close - (atr * stopLoss);
-def profitTargetPrice = close + (atr * profitTarget);
+def stopLossLevel = price - (atr * stopLoss);
+def profitTargetLevel = price + (atr * profitTarget);
 
 # Trend filter using multiple timeframes
-def ema20 = ExpAverage(close, 20);
-def ema50 = ExpAverage(close, 50);
-def ema200 = ExpAverage(close, 200);
-def bullishTrend = ema20 > ema50 && ema50 > ema200;
+def ema20 = ExpAverage(price, 20);
+def ema50 = ExpAverage(price, 50);
+def ema200 = ExpAverage(price, 200);
+def bullishTrend = ema20 > ema50 and ema50 > ema200;
 
-# Seasonal restriction with additional holiday considerations
+# Seasonal restriction
 def currentMonth = GetMonth();
-def currentDayOfMonth = GetDayOfMonth();
-def notRestrictedMonth = currentMonth != 8 && currentMonth != 9;
-def notHolidayPeriod = !(currentMonth == 12 && currentDayOfMonth > 20) && 
-                       !(currentMonth == 1 && currentDayOfMonth < 5);
+def currentDay = GetDayOfMonth(GetYYYYMMDD());
+def notRestrictedMonth = currentMonth != 8 and currentMonth != 9;
+def notHolidayPeriod = !(currentMonth == 12 and currentDay > 20) and 
+                       !(currentMonth == 1 and currentDay < 5);
 
-# Enhanced entry conditions with multiple confirmation levels
-def weakEntryCondition = 
-    intermediateRising &&
-    intermediateAboveThreshold &&
-    rsiRising &&
-    rsiAboveThreshold &&
-    (macdRising || macdCrossAbove || macdAbove) &&
-    notRestrictedMonth &&
-    notHolidayPeriod;
+# Entry Conditions
+def marketForcastEntry = intermediateRising and intermediateAboveThreshold;
+def rsiEntry = rsiRising and rsiAboveThreshold;
+def macdEntry = macdRising or macdCrossAbove or macdAbove;
+def seasonalEntry = notRestrictedMonth and notHolidayPeriod;
 
-def strongEntryCondition = 
-    weakEntryCondition &&
-    strongBullishForecast &&
-    rsiMomentum &&
-    strongMACD &&
-    highVolume &&
-    bullishTrend;
+# Exit Conditions
+def rsiExit = !rsiAboveThreshold;
+def marketForecastExit = !intermediateAboveThreshold;
+def macdExit = !macdAbove and macdValue < macdAvg and macdValue[1] >= macdAvg[1];
 
-# Exit conditions with multiple levels
-def weakExitCondition = 
-    !rsiAboveThreshold || 
-    !intermediateAboveThreshold || 
-    (!macdAbove && macdValue < macdAvg && macdValue[1] >= macdAvg[1]);
+# Exit conditions combining
+def weakExitCondition = rsiExit or marketForecastExit or macdExit;
+def priceExit = price < stopLossLevel or price > profitTargetLevel;
+def forecastExit = mktFar < 30 and mktIntermediate < 30;
+def strongExitCondition = weakExitCondition or priceExit or forecastExit;
 
-def strongExitCondition = 
-    weakExitCondition ||
-    close < stopLossPrice ||
-    close > profitTargetPrice ||
-    (far < 30 && intermediate < 30);
+# Base entry conditions (without position check)
+def baseWeakEntry = marketForcastEntry and rsiEntry and macdEntry and seasonalEntry;
+def baseStrongEntry = baseWeakEntry and strongBullishForecast and rsiMomentum and 
+                     strongMACD and highVolume and bullishTrend;
 
-# Plot signals with strength indication
+# Position tracking
+def inPosition = CompoundValue(1, 
+    if !inPosition[1] and (baseStrongEntry or baseWeakEntry) then 1
+    else if inPosition[1] and strongExitCondition then 0
+    else inPosition[1], 0);
+
+# Final entry conditions (with position check)
+def weakEntryCondition = !inPosition and baseWeakEntry;
+def strongEntry = !inPosition and baseStrongEntry;
+
+# Plot signals
 plot WeakEntrySignal = weakEntryCondition;
-plot StrongEntrySignal = strongEntryCondition;
-plot ExitSignal = strongExitCondition;
+plot StrongEntrySignal = strongEntry;
+plot ExitSignal = inPosition and strongExitCondition;
+plot StopLossLine = if inPosition then stopLossLevel else Double.NaN;
+plot ProfitTargetLine = if inPosition then profitTargetLevel else Double.NaN;
 
+# Signal styling
 WeakEntrySignal.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_UP);
 StrongEntrySignal.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_UP);
 ExitSignal.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_DOWN);
@@ -116,28 +116,22 @@ ExitSignal.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_DOWN);
 WeakEntrySignal.SetDefaultColor(Color.LIGHT_GREEN);
 StrongEntrySignal.SetDefaultColor(Color.GREEN);
 ExitSignal.SetDefaultColor(Color.RED);
+StopLossLine.SetDefaultColor(Color.RED);
+ProfitTargetLine.SetDefaultColor(Color.GREEN);
 
-# Risk management plots
-plot StopLoss = if !IsNaN(stopLossPrice) then stopLossPrice else Double.NaN;
-plot ProfitTarget = if !IsNaN(profitTargetPrice) then profitTargetPrice else Double.NaN;
-
-StopLoss.SetDefaultColor(Color.RED);
-ProfitTarget.SetDefaultColor(Color.GREEN);
-StopLoss.SetStyle(Curve.SHORT_DASH);
-ProfitTarget.SetStyle(Curve.SHORT_DASH);
-
-# Alerts with different levels of urgency
-Alert(strongEntryCondition, "Strong Entry Signal", Alert.BAR, Sound.Bell);
+# Alerts
+Alert(strongEntry, "Strong Entry Signal", Alert.BAR, Sound.Bell);
 Alert(weakEntryCondition, "Weak Entry Signal", Alert.BAR, Sound.Ding);
-Alert(strongExitCondition, "Exit Signal", Alert.BAR, Sound.Ring);
+Alert(inPosition and strongExitCondition, "Exit Signal", Alert.BAR, Sound.Ring);
 
-# Enhanced labels for debugging and monitoring
+# Labels
 AddLabel(showLabels, 
-    "MF(N/I/F): " + Round(near, 1) + "/" + Round(intermediate, 1) + "/" + Round(far, 1) + 
+    "Position: " + if inPosition then "LONG" else "FLAT" +
+    "\nMF(N/I/F): " + Round(mktNear, 1) + "/" + Round(mktIntermediate, 1) + "/" + Round(mktFar, 1) + 
     "\nRSI: " + Round(rsi, 1) + 
     "\nMACD: " + Round(macdValue, 2) + 
-    "\nVol%: " + Round(volume / averageVolume * 100, 0) + "%", 
-    if strongEntryCondition then Color.GREEN 
+    "\nVol%: " + Round(volume / volumeAvg * 100, 0) + "%", 
+    if strongEntry then Color.GREEN 
     else if weakEntryCondition then Color.LIGHT_GREEN 
-    else if strongExitCondition then Color.RED 
+    else if strongExitCondition and inPosition then Color.RED 
     else Color.GRAY);
