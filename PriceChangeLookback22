@@ -1,0 +1,41 @@
+# Title: 22-Day Price Change
+# Author: Claude
+# Date: 2024-10-26
+
+declare lower;
+
+input price = close;
+input length = 22;
+
+# Calculate the price change compared to 22 days ago
+def priorPrice = price[length];
+def changeValue = if !isNaN(priorPrice) then price - priorPrice else Double.NaN;
+
+# Calculate the percentage change
+def pctChange = if !isNaN(priorPrice) and priorPrice != 0 
+    then (changeValue / priorPrice) * 100 
+    else Double.NaN;
+
+# Plot the actual price change
+plot PriceChangeLine = changeValue;
+PriceChangeLine.SetPaintingStrategy(PaintingStrategy.LINE);
+PriceChangeLine.SetLineWeight(2);
+PriceChangeLine.SetDefaultColor(CreateColor(255, 255, 255));  # White
+
+# Plot the percentage change
+plot PercentChangeLine = pctChange;
+PercentChangeLine.SetPaintingStrategy(PaintingStrategy.LINE);
+PercentChangeLine.SetLineWeight(2);
+PercentChangeLine.SetDefaultColor(CreateColor(255, 255, 0));  # Yellow
+
+# Add zero line for reference
+plot ZeroLine = 0;
+ZeroLine.SetDefaultColor(CreateColor(128, 128, 128));  # Gray
+ZeroLine.SetLineWeight(1);
+ZeroLine.SetStyle(Curve.LONG_DASH);
+
+# Add labels with proper error handling
+AddLabel(yes, "Price Change: $" + AsPrice(if !isNaN(changeValue) then changeValue else 0), 
+    if !isNaN(changeValue) and changeValue >= 0 then Color.GREEN else Color.RED);
+AddLabel(yes, "Percent Change: " + AsPercent(if !isNaN(pctChange) then pctChange else 0), 
+    if !isNaN(pctChange) and pctChange >= 0 then Color.GREEN else Color.RED);
