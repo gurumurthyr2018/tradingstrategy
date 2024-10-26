@@ -1,5 +1,5 @@
 # Trading Strategy combining RSI, MACD, and Market Forecast
-# Version: 2.5
+# Version: 2.8
 declare upper;
 # Input parameters
 def rsiLength = 14;
@@ -8,10 +8,13 @@ def rsiOversold = 30;
 def macdFastLength = 8;
 def macdSlowLength = 17;
 def macdSignalLength = 9;
+def minHoldingPeriod = 5; # Minimum bars to hold a position
+
 # RSI Calculation
 def RSI = RSI(length = rsiLength);
 def RSI_Above50 = RSI > 50;
 def RSI_Below50 = RSI < 50;
+
 # MACD Calculations
 def fastEMA = ExpAverage(close, macdFastLength);
 def slowEMA = ExpAverage(close, macdSlowLength);
@@ -19,6 +22,7 @@ def MACD = fastEMA - slowEMA;
 def MACDSignal = ExpAverage(MACD, macdSignalLength);
 def MACDCrossAbove = MACD > MACDSignal and MACD[1] <= MACDSignal[1];
 def MACDCrossBelow = MACD < MACDSignal and MACD[1] >= MACDSignal[1];
+
 # Market Forecast Far Line calculations
 def MF = MarketForecast();
 def MF_Far = MF[2];
@@ -26,35 +30,75 @@ def MF_Far_Rising = MF_Far > MF_Far[1];
 def MF_Far_Above50 = MF_Far > 50;
 def MF_Far_Falling = MF_Far < MF_Far[1];
 def MF_Far_Below50 = MF_Far < 50;
-# Modified RSI Divergence Logic
+
+# Modified RSI Divergence Logic with Confirmation
 def recentHigh2Days = Highest(high, 2);
 def previousHigh15Days = Highest(high[2], 15);
 def lowerHighs = recentHigh2Days < previousHigh15Days;
+
+# Trend confirmation
+def MovingAvg20 = ExpAverage(close, 20);
+def MovingAvg50 = ExpAverage(close, 50);
+def uptrend = MovingAvg20 > MovingAvg50;
+def downtrend = MovingAvg20 < MovingAvg50;
+
+# RSI Divergence with confirmation
 def RSI_Diverging = lowerHighs and 
                     RSI > rsiOverbought and 
-                    RSI < RSI[1];
-# Position Tracking
+                    RSI < RSI[1] and
+                    downtrend;
+
+# Enhanced Position Tracking with Filters
 def potentialBuySignal = MACDCrossAbove and 
                         RSI_Above50 and 
-                        (MF_Far_Rising or MF_Far_Above50);
-def potentialSellSignal = (RSI_Below50 or 
-                         (RSI_Diverging and MACDCrossBelow) or 
-                         (MF_Far_Falling or MF_Far_Below50));
-# Track position state (1 = in position, 0 = no position)
+                        (MF_Far_Rising or MF_Far_Above50) and
+                        uptrend;
+
+def potentialSellSignal = (
+    (RSI_Below50 and downtrend) or 
+    (RSI_Diverging and MACDCrossBelow) or 
+    (MF_Far_Falling and MF_Far_Below50)
+);
+
+# Position entry/exit counter
+def barsSinceEntry = CompoundValue(1,
+    if potentialBuySignal then 0
+    else barsSinceEntry[1] + 1,
+    0);
+
+# Add minimum holding period check
+def meetsHoldingPeriod = barsSinceEntry >= minHoldingPeriod;
+
+# Track position state with improved filtering
 def inPosition = CompoundValue(1, 
-    if potentialBuySignal and !inPosition[1] then 1
-    else if potentialSellSignal and inPosition[1] then 0
-    else inPosition[1], 0);
-# Final Buy/Sell Signals
-def buySignal = potentialBuySignal and !inPosition[1];
-def sellSignal = potentialSellSignal and inPosition[1];
+    if potentialBuySignal and !inPosition[1] and uptrend then 1
+    else if potentialSellSignal and inPosition[1] and meetsHoldingPeriod then 0
+    else inPosition[1], 
+    0);
+
+# Final Buy/Sell Signals with Additional Confirmation
+def buySignal = potentialBuySignal and 
+                !inPosition[1] and 
+                uptrend;
+
+def sellSignal = potentialSellSignal and 
+                 inPosition[1] and 
+                 meetsHoldingPeriod;
+
 # Plot Entry Signals (Green Arrow Up)
 plot EntrySignal = if buySignal then low - (low * 0.001) else Double.NaN;
 EntrySignal.SetPaintingStrategy(PaintingStrategy.ARROW_UP);
 EntrySignal.SetDefaultColor(Color.GREEN);
 EntrySignal.SetLineWeight(3);
+
 # Plot Exit Signals (Red Arrow Down)
 plot ExitSignal = if sellSignal then high + (high * 0.001) else Double.NaN;
 ExitSignal.SetPaintingStrategy(PaintingStrategy.ARROW_DOWN);
 ExitSignal.SetDefaultColor(Color.RED);
 ExitSignal.SetLineWeight(3);
+
+# Plot Moving Averages for visual confirmation
+plot MA20 = MovingAvg20;
+plot MA50 = MovingAvg50;
+MA20.SetDefaultColor(Color.YELLOW);
+MA50.SetDefaultColor(Color.BLUE);
