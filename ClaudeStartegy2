@@ -1,0 +1,60 @@
+# Trading Strategy combining RSI, MACD, and Market Forecast
+# Version: 2.5
+declare upper;
+# Input parameters
+def rsiLength = 14;
+def rsiOverbought = 70;
+def rsiOversold = 30;
+def macdFastLength = 8;
+def macdSlowLength = 17;
+def macdSignalLength = 9;
+# RSI Calculation
+def RSI = RSI(length = rsiLength);
+def RSI_Above50 = RSI > 50;
+def RSI_Below50 = RSI < 50;
+# MACD Calculations
+def fastEMA = ExpAverage(close, macdFastLength);
+def slowEMA = ExpAverage(close, macdSlowLength);
+def MACD = fastEMA - slowEMA;
+def MACDSignal = ExpAverage(MACD, macdSignalLength);
+def MACDCrossAbove = MACD > MACDSignal and MACD[1] <= MACDSignal[1];
+def MACDCrossBelow = MACD < MACDSignal and MACD[1] >= MACDSignal[1];
+# Market Forecast Far Line calculations
+def MF = MarketForecast();
+def MF_Far = MF[2];
+def MF_Far_Rising = MF_Far > MF_Far[1];
+def MF_Far_Above50 = MF_Far > 50;
+def MF_Far_Falling = MF_Far < MF_Far[1];
+def MF_Far_Below50 = MF_Far < 50;
+# Modified RSI Divergence Logic
+def recentHigh2Days = Highest(high, 2);
+def previousHigh15Days = Highest(high[2], 15);
+def lowerHighs = recentHigh2Days < previousHigh15Days;
+def RSI_Diverging = lowerHighs and 
+                    RSI > rsiOverbought and 
+                    RSI < RSI[1];
+# Position Tracking
+def potentialBuySignal = MACDCrossAbove and 
+                        RSI_Above50 and 
+                        (MF_Far_Rising or MF_Far_Above50);
+def potentialSellSignal = (RSI_Below50 or 
+                         (RSI_Diverging and MACDCrossBelow) or 
+                         (MF_Far_Falling or MF_Far_Below50));
+# Track position state (1 = in position, 0 = no position)
+def inPosition = CompoundValue(1, 
+    if potentialBuySignal and !inPosition[1] then 1
+    else if potentialSellSignal and inPosition[1] then 0
+    else inPosition[1], 0);
+# Final Buy/Sell Signals
+def buySignal = potentialBuySignal and !inPosition[1];
+def sellSignal = potentialSellSignal and inPosition[1];
+# Plot Entry Signals (Green Arrow Up)
+plot EntrySignal = if buySignal then low - (low * 0.001) else Double.NaN;
+EntrySignal.SetPaintingStrategy(PaintingStrategy.ARROW_UP);
+EntrySignal.SetDefaultColor(Color.GREEN);
+EntrySignal.SetLineWeight(3);
+# Plot Exit Signals (Red Arrow Down)
+plot ExitSignal = if sellSignal then high + (high * 0.001) else Double.NaN;
+ExitSignal.SetPaintingStrategy(PaintingStrategy.ARROW_DOWN);
+ExitSignal.SetDefaultColor(Color.RED);
+ExitSignal.SetLineWeight(3);
