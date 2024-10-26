@@ -1,5 +1,5 @@
-# Trading Strategy combining RSI, MACD, and Market Forecast
-# Version: 3.6
+# Trading Strategy with Entry Delay After Exit
+# Version: 3.7
 declare upper;
 input tradeSize = 100;  # Number of shares/contracts per trade
 
@@ -11,6 +11,7 @@ input macdFastLength = 8;
 input macdSlowLength = 17;
 input macdSignalLength = 9;
 input minHoldingPeriod = 5;
+input daysAfterExit = 2;  # Minimum days to wait after exit before new entry
 
 # RSI Calculation and Crossover
 def RSI = RSI(length = rsiLength);
@@ -27,7 +28,8 @@ def MACD_CrossAbove = MACD > MACDSignal and MACD[1] <= MACDSignal[1];  # MACD cr
 
 # Market Forecast Far Line calculations
 def marketForecast = MarketForecast();
-def MF_Far = marketForecast[2];
+#def MF_Far =marketForecast[2];
+def MF_Far = MarketForecast().intermediate;
 def MF_Far_Above50 = MF_Far > 50;
 def MF_Far_CrossAbove50 = MF_Far > 50 and MF_Far[1] <= 50;  # MF Far crosses above 50
 def MF_Far_Falling = MF_Far < MF_Far[1];
@@ -52,9 +54,6 @@ def scenario3_Entry = MF_Far_CrossAbove50 and # MF Far crosses above 50
                      RSI_Above50 and         # RSI is above 50
                      MACD > 0;               # MACD Fast line above slow line
 
-# Combined entry signal
-def potentialBuySignal = (scenario1_Entry or scenario2_Entry or scenario3_Entry) and uptrend;
-
 # Exit conditions
 def potentialSellSignal = 
     RSI < 50 or                              # RSI drops below 50
@@ -62,21 +61,39 @@ def potentialSellSignal =
     (MF_Far_Falling and MF_Far_Below50) or   # Market Forecast Far falls below 50
     downtrend;                               # Moving average trend turns down
 
-# Position entry/exit counter
-rec barsSinceEntry = if potentialBuySignal then 0
-    else barsSinceEntry[1] + 1;
+# Position tracking and signals
+rec barsSinceEntry = if !IsNaN(close) then
+    if (scenario1_Entry or scenario2_Entry or scenario3_Entry) and uptrend then 0
+    else barsSinceEntry[1] + 1
+else 0;
 
 # Add minimum holding period check
 def meetsHoldingPeriod = barsSinceEntry >= minHoldingPeriod;
 
-# Track position state
-rec inPosition = if potentialBuySignal and !inPosition[1] then 1
+# Track position state - Define inPosition and signals first
+rec inPosition = if !IsNaN(close) then
+    if (scenario1_Entry or scenario2_Entry or scenario3_Entry) and uptrend and !inPosition[1] then 1
     else if potentialSellSignal and inPosition[1] and meetsHoldingPeriod then 0
-    else inPosition[1];
+    else inPosition[1]
+else 0;
 
-# Final Buy/Sell Signals
-def buySignal = potentialBuySignal and !inPosition[1];
 def sellSignal = potentialSellSignal and inPosition[1] and meetsHoldingPeriod;
+
+# Track days since last exit
+rec daysSinceExit = if !IsNaN(close) then
+    if sellSignal[1] then 1
+    else if daysSinceExit[1] >= 0 then daysSinceExit[1] + 1
+    else 0
+else 0;
+
+# Check if enough time has passed since last exit
+def canEnter = daysSinceExit >= daysAfterExit or daysSinceExit == 0;
+
+# Final buy signal with waiting period
+def buySignal = (scenario1_Entry or scenario2_Entry or scenario3_Entry) and 
+                uptrend and 
+                !inPosition[1] and 
+                canEnter;
 
 # Debug plots to monitor conditions
 plot Debug_Scenario1 = if scenario1_Entry then 1 else 0;
@@ -92,19 +109,11 @@ Debug_Scenario3.SetDefaultColor(Color.MAGENTA);
 Debug_Scenario3.SetPaintingStrategy(PaintingStrategy.BOOLEAN_POINTS);
 
 # Order Placement Logic
-AddOrder(OrderType.BUY_TO_OPEN,
-         buySignal,
-         tradeSize = tradeSize,
-         name = "LONG_ENTRY",
-         price = close);
+AddOrder(OrderType.BUY_TO_OPEN, buySignal, tradeSize = tradeSize, name = "LONG_ENTRY", price = close);
 
-AddOrder(OrderType.SELL_TO_CLOSE,
-         sellSignal,
-         tradeSize = tradeSize,
-         name = "LONG_EXIT",
-         price = close);
+AddOrder(OrderType.SELL_TO_CLOSE, sellSignal, tradeSize = tradeSize, name = "LONG_EXIT", price = close);
 
-# Enhanced entry signal information with scenario details
+# Enhanced entry signal information with scenario and waiting period details
 AddChartBubble(buySignal, 
                low - (low * 0.002),
                "ENTRY\n" +
@@ -114,6 +123,8 @@ AddChartBubble(buySignal,
                "RSI: " + AsText(Round(RSI, 1)) + 
                "\nMACD vs Signal: " + AsText(Round(MACD - MACDSignal, 3)) +
                "\nMF Far: " + AsText(Round(MF_Far, 1)) +
+               "\nMF Far-0: " + AsText(Round(MF_Far[1], 1)) +
+               "\nDays Since Exit: " + AsText(daysSinceExit) +
                "\nUptrend: " + AsText(uptrend),
                Color.GREEN);
 
