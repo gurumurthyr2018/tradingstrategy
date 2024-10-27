@@ -1,32 +1,49 @@
-# Title: 22-Day Price Change
+# Title: 5 & 22-Day Price Change
 # Author: Claude
 # Date: 2024-10-26
-
 declare lower;
 
 input price = close;
-input length = 22;
+input longLength = 22;
+input shortLength = 5;
 
-# Calculate the price change compared to 22 days ago
-def priorPrice = price[length];
-def changeValue = if !isNaN(priorPrice) then price - priorPrice else Double.NaN;
+# Calculate the price changes
+def priorPriceLong = price[longLength];
+def priorPriceShort = price[shortLength];
 
-# Calculate the percentage change
-def pctChange = if !isNaN(priorPrice) and priorPrice != 0 
-    then (changeValue / priorPrice) * 100 
+def changeValueLong = if !isNaN(priorPriceLong) then price - priorPriceLong else Double.NaN;
+def changeValueShort = if !isNaN(priorPriceShort) then price - priorPriceShort else Double.NaN;
+
+# Calculate the percentage changes
+def pctChangeLong = if !isNaN(priorPriceLong) and priorPriceLong != 0 
+    then (changeValueLong / priorPriceLong) * 100 
+    else Double.NaN;
+    
+def pctChangeShort = if !isNaN(priorPriceShort) and priorPriceShort != 0 
+    then (changeValueShort / priorPriceShort) * 100 
     else Double.NaN;
 
-# Plot the actual price change
-plot PriceChangeLine = changeValue;
-PriceChangeLine.SetPaintingStrategy(PaintingStrategy.LINE);
-PriceChangeLine.SetLineWeight(2);
-PriceChangeLine.SetDefaultColor(CreateColor(255, 255, 255));  # White
+# Plot the actual price changes
+plot PriceChangeLongLine = changeValueLong;
+PriceChangeLongLine.SetPaintingStrategy(PaintingStrategy.LINE);
+PriceChangeLongLine.SetLineWeight(2);
+PriceChangeLongLine.SetDefaultColor(CreateColor(255, 255, 255));  # White
 
-# Plot the percentage change
-plot PercentChangeLine = pctChange;
-PercentChangeLine.SetPaintingStrategy(PaintingStrategy.LINE);
-PercentChangeLine.SetLineWeight(2);
-PercentChangeLine.SetDefaultColor(CreateColor(255, 255, 0));  # Yellow
+plot PriceChangeShortLine = changeValueShort;
+PriceChangeShortLine.SetPaintingStrategy(PaintingStrategy.LINE);
+PriceChangeShortLine.SetLineWeight(2);
+PriceChangeShortLine.SetDefaultColor(CreateColor(0, 255, 255));  # Cyan
+
+# Plot the percentage changes
+plot PercentChangeLongLine = pctChangeLong;
+PercentChangeLongLine.SetPaintingStrategy(PaintingStrategy.LINE);
+PercentChangeLongLine.SetLineWeight(2);
+PercentChangeLongLine.SetDefaultColor(CreateColor(255, 255, 0));  # Yellow
+
+plot PercentChangeShortLine = pctChangeShort;
+PercentChangeShortLine.SetPaintingStrategy(PaintingStrategy.LINE);
+PercentChangeShortLine.SetLineWeight(2);
+PercentChangeShortLine.SetDefaultColor(CreateColor(0, 255, 0));  # Green
 
 # Add zero line for reference
 plot ZeroLine = 0;
@@ -35,7 +52,14 @@ ZeroLine.SetLineWeight(1);
 ZeroLine.SetStyle(Curve.LONG_DASH);
 
 # Add labels with proper error handling
-AddLabel(yes, "Price Change: $" + AsPrice(if !isNaN(changeValue) then changeValue else 0), 
-    if !isNaN(changeValue) and changeValue >= 0 then Color.GREEN else Color.RED);
-AddLabel(yes, "Percent Change: " + AsPercent(if !isNaN(pctChange) then pctChange else 0), 
-    if !isNaN(pctChange) and pctChange >= 0 then Color.GREEN else Color.RED);
+AddLabel(yes, "22-Day Price Change: $" + AsPrice(if !isNaN(changeValueLong) then changeValueLong else 0), 
+    if !isNaN(changeValueLong) and changeValueLong >= 0 then Color.GREEN else Color.RED);
+    
+AddLabel(yes, "22-Day Percent Change: " + AsPercent(if !isNaN(pctChangeLong) then pctChangeLong else 0), 
+    if !isNaN(pctChangeLong) and pctChangeLong >= 0 then Color.GREEN else Color.RED);
+    
+AddLabel(yes, "5-Day Price Change: $" + AsPrice(if !isNaN(changeValueShort) then changeValueShort else 0), 
+    if !isNaN(changeValueShort) and changeValueShort >= 0 then Color.GREEN else Color.RED);
+    
+AddLabel(yes, "5-Day Percent Change: " + AsPercent(if !isNaN(pctChangeShort) then pctChangeShort else 0), 
+    if !isNaN(pctChangeShort) and pctChangeShort >= 0 then Color.GREEN else Color.RED);
